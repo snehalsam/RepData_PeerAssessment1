@@ -1,20 +1,205 @@
-# Reproducible Research: Peer Assessment 1
+Reproducible Research: Peer Assessment 1
+========================================================
 
 
 ## Loading and preprocessing the data
+
+Let's start by reading the file into R. I would like to use the data.table package so let's load that as well and convert the file. We will also set the key to the date column to begin with.
+
+```{r}
+activity <- read.csv("activity.csv" , colClasses = c("numeric", "Date", "numeric"))
+
+library(data.table)
+
+activity <- data.table(activity)
+
+setkey(activity, date)
+```
+
+
+
 
 
 
 ## What is mean total number of steps taken per day?
 
+Let's calculate the mean, median and sum grouped by date and store it into another variable. 
+
+```{r}
+act_daygrpd <- activity[,list(mean=mean(steps, na.rm=TRUE), median=as.double(median(steps)), sum= sum(steps) ), by=date]
+
+```
+
+
+
+I would like to use the ggplot2 package so let's load that up as well. Next we plot the histogram of the total number of steps taken each day
+
+
+```{r}
+library(ggplot2)
+
+qplot(sum, data=act_daygrpd, geom="histogram")
+
+```
+
+
+
+
+Then return each day's mean, median and sum of steps.
+
+
+```{r}
+
+act_daygrpd
+
+```
+
 
 
 ## What is the average daily activity pattern?
+
+We now calculate and save the mean of the steps taken in ech interval across all days and 
+
+```{r}
+act_stepgrpd <- activity[,list(mean=mean(steps, na.rm=TRUE)), by=interval]
+
+```
+
+
+next we plot this as a time series. 
+
+
+```{r}
+ggplot(act_stepgrpd, aes(interval, mean)) + geom_line() + xlab("Interval") + ylab("Avg Steps across all days")
+```
+
+
+
+After that we return the interval with the max average of steps taken.
+
+
+```{r}
+
+
+
+activity[which.max(act_stepgrpd[,mean]),interval]
+
+```
+
 
 
 
 ## Imputing missing values
 
+Let's find the number of NAs in the data.
+
+```{r}
+sum(is.na(activity[,steps]))
+
+```
+
+An accurate way to fill in missing values would be to take the mean of the total steps taken for that interval on those particular weekdays. For instance if interval 100 on Monday has missing values then we could fill it in with the average steps taken on all interval 100 on all Mondays to get a realistic estimate of the trend.
+
+Since the assignment has asked for a simple strategy I am choosing to fill in the missing values with the mean of that particular interval (a missing interval 100 will be assigned mean of overall interval 100).
+
+We make an explicit copy of the data table and fill in the missing values.
+
+```{r}
+actnew <- copy(activity)
+
+
+fillna <- function() {
+      
+      for (i in seq_along(actnew[,steps])) {
+            
+            if (is.na(actnew[i,steps])) {
+                  
+                  tempint <- actnew[i, interval]
+                  
+                  tempr <- act_stepgrpd[interval == tempint, mean]
+                  
+                  actnew[i,steps := tempr]
+            }
+            
+      }
+      
+}
+
+fillna()
+
+
+
+```
+
+Let's calculate the mean, median and sum of each day of this new data set.
+
+```{r}
+actnew_daygrpd <- actnew[,list(mean=mean(steps, na.rm=TRUE), median=as.double(median(steps)), sum= sum(steps) ), by=date]
+
+```
+
+Next we plot the histogram of the total number of steps taken each day.
+
+```{r}
+qplot(sum, data=actnew_daygrpd, geom="histogram")
+
+```
+
+Let's return the median, mean and sum of steps for each day.
+
+```{r}
+actnew_daygrpd
+
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Let's classify each day as either weekday (mon - fri) or weekend.
+
+```{r}
+actnew[,day:=weekdays(actnew[,date])]
+
+wkend <- function () {
+      
+      for (i in seq_along(actnew[,day])) {
+            
+            if (actnew[i,day] == "Saturday") {
+                  
+                  actnew[i,day:="weekend"]
+            }
+            
+            else if (actnew[i,day] == "Sunday") {
+                  
+                  actnew[i,day:="weekend"]
+            }
+            
+            else {
+                  
+                  actnew[i,day:="weekday"]
+            }
+            
+      }
+}
+
+wkend()
+
+actnew[,day:=as.factor(day)]
+
+
+
+
+
+```
+
+Next we calculate the mean of total steps taken each interval across all days and plot it as a time series - seperately for weekday and weekend.
+
+```{r}
+actnew_stepgrpd <- actnew[,list(mean=mean(steps, na.rm=TRUE)), by=list(interval,day)]
+
+ggplot(actnew_stepgrpd, aes(x=interval, y=mean)) + geom_line() + facet_grid(day ~ .)
+
+```
+
+
+
